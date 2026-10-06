@@ -1,0 +1,13 @@
+# Bare-bones repo: only the code needed to run the project is tracked.
+# Everything else (course files, notes, editor settings) stays local.
+/*
+!/.gitignore
+!/README.md
+!/Ball_Beam_env.yml
+!/src/
+
+# Generated at runtime
+src/config.json
+__pycache__/
+*.pyc
+.DS_Store
