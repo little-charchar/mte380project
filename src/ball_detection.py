@@ -162,11 +162,43 @@ def detect_ball_x(frame):
     
     return found, x_normalized, vis_frame
 
+def detect_ball_xy(frame):
+    """
+    Detects ball in frame and returns normalized 2D plate coordinates [-1.0, 1.0].
+    Returns: (found: bool, norm_x: float, norm_y: float, vis_frame: np.ndarray)
+    """
+    vis_frame = frame.copy()
+    h, w = frame.shape[:2]
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+
+    # Ball HSV thresholding bounds
+    lower_color = np.array([5, 120, 120])
+    upper_color = np.array([25, 255, 255])
+    mask = cv2.inRange(hsv, lower_color, upper_color)
+    mask = cv2.erode(mask, None, iterations=2)
+    mask = cv2.dilate(mask, None, iterations=2)
+
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if contours:
+        c = max(contours, key=cv2.contourArea)
+        ((cx, cy), radius) = cv2.minEnclosingCircle(c)
+        if radius > 5:
+            # Overlays for GUI window
+            cv2.circle(vis_frame, (int(cx), int(cy)), int(radius), (0, 255, 0), 2)
+            cv2.circle(vis_frame, (int(w / 2), int(h / 2)), 4, (0, 0, 255), -1)
+
+            # Center origin (0, 0) normalized to [-1.0, 1.0]
+            norm_x = (cx - (w / 2.0)) / (w / 2.0)
+            norm_y = (cy - (h / 2.0)) / (h / 2.0)
+            return True, norm_x, norm_y, vis_frame
+
+    return False, 0.0, 0.0, vis_frame
+
 # For testing/calibration when run directly
 def main():
     """Test ball detection with current config."""
     detector = BallDetector()
-    cap = cv2.VideoCapture(1)  # Logitech C270 on this Mac (0 = built-in camera)
+    cap = cv2.VideoCapture(0)  # Logitech C270 on this Mac (0 = built-in camera)
     
     print("Ball Detection Test")
     print("Press 'q' to quit")
