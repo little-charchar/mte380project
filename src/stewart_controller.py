@@ -16,7 +16,7 @@ CAMERA_INDEX = 0
 
 # 1. Neutral & Leveling Trim
 PHYSICAL_NEUTRAL = 70.0             # Must match NEUTRAL_ANGLE in Arduino
-SERVO_TRIM = [0.0, 0.0, 0.0]        # Nudge by +/- 1.0 to 4.0 deg if one corner is higher when flat
+SERVO_TRIM = [8.0, 0.0, 0.0]        # Nudge by +/- 1.0 to 4.0 deg if one corner is higher when flat
 MIN_SERVO_ANGLE = 55                # Must match MIN_SAFE_ANGLE in Arduino
 MAX_SERVO_ANGLE = 85                # Must match MAX_SAFE_ANGLE in Arduino
 
@@ -27,8 +27,13 @@ DEFAULT_KD = 1.0
 KD_TANGENTIAL = 0.6
 MAX_TILT_DEG = 4.0
 
-DEADBAND_CM = 0.5                  # Ignore tiny position errors within 0.5 mm of center
-MIN_ANGLE_CHANGE = 0.3             # Don't move servos unless angle changes by >= 0.45 deg
+DEADBAND_CM = 0.35                  # Ignore tiny position errors within 0.5 mm of center
+MIN_ANGLE_CHANGE = 0.3             # Don't move servos unless angle changes by >= 0.3 deg
+
+# Mouse-Drawn Trajectory Settings
+TRAJ_SPEED_CM_S = 2.2       # Speed the target moves along your drawn line (cm/s)
+TRAJ_RAMP_SEC = 1.5         # Seconds to smoothly blend from current ball pos onto the path
+KV_FEEDFORWARD = 0.18       # Extra tilt per (cm/s) along path tangent to overcome friction
 
 # 3. Axis Direction Signs (Flip to -1.0 or 1.0 if an axis tilts the wrong way)
 SIGN_Y_AXIS = -1.0                   # Controls front/back tilt (from camera Y)
@@ -268,13 +273,22 @@ class CoursePlateController:
         self.vel_filtered_x = 0.8 * raw_vx + 0.2 * self.vel_filtered_x
         self.vel_filtered_y = 0.8 * raw_vy + 0.2 * self.vel_filtered_y
 
-        # 3. Deadband when parked at center
+        # 3. Soft deadband & camera-noise gate near center
         dist_cm = math.hypot(err_x, err_y)
         speed_cms = math.hypot(self.vel_filtered_x, self.vel_filtered_y)
-        if dist_cm < DEADBAND_CM and speed_cms < 1.5:
+        if dist_cm < DEADBAND_CM and speed_cms < 0.8:
             self.integral_x = 0.0
             self.integral_y = 0.0
             return 0.0, 0.0
+
+        # Smoothly ramp corrections outside DEADBAND_CM so crossing the edge doesn't kick the ball
+        if dist_cm < DEADBAND_CM * 2.0:
+            scale = max(0.0, (dist_cm - DEADBAND_CM) / DEADBAND_CM)
+            err_x *= scale
+            err_y *= scale
+            if speed_cms < 0.8:
+                self.vel_filtered_x = 0.0
+                self.vel_filtered_y = 0.0
 
         # 4. Asymmetric radial damping: catch outward rolls hard, guide inward rolls gently
         vx, vy = self.vel_filtered_x, self.vel_filtered_y
