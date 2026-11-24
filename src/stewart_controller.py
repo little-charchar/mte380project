@@ -10,7 +10,7 @@ import queue
 # =========================================================
 # TUNING SETTINGS
 # =========================================================
-USB_PORT = "/dev/cu.usbmodem1401"   # Run `ls /dev/cu.usb*` in terminal to check
+USB_PORT = "/dev/cu.usbmodem11401"   # Run `ls /dev/cu.usb*` in terminal to check
 BAUD_RATE = 115200
 CAMERA_INDEX = 0
 
@@ -21,14 +21,14 @@ MIN_SERVO_ANGLE = 55                # Must match MIN_SAFE_ANGLE in Arduino
 MAX_SERVO_ANGLE = 85                # Must match MAX_SAFE_ANGLE in Arduino
 
 # 2. Starting PID Gains (Also adjustable live via OpenCV sliders)
-DEFAULT_KP = 1.0
+DEFAULT_KP = 0.6
 DEFAULT_KI = 0.1
-DEFAULT_KD = 1.0
+DEFAULT_KD = 0.6
 KD_TANGENTIAL = 0.6
 MAX_TILT_DEG = 4.0
 
-DEADBAND_CM = 0.35                  # Ignore tiny position errors within 0.5 mm of center
-MIN_ANGLE_CHANGE = 0.3             # Don't move servos unless angle changes by >= 0.3 deg
+DEADBAND_CM = 0.4                  # Ignore tiny position errors within 0.5 mm of center
+MIN_ANGLE_CHANGE = 0             # Don't move servos unless angle changes by >= 0.3 deg
 
 # Mouse-Drawn Trajectory Settings
 TRAJ_SPEED_CM_S = 2.2       # Speed the target moves along your drawn line (cm/s)
@@ -290,23 +290,10 @@ class CoursePlateController:
                 self.vel_filtered_x = 0.0
                 self.vel_filtered_y = 0.0
 
-        # 4. Asymmetric radial damping: catch outward rolls hard, guide inward rolls gently
-        vx, vy = self.vel_filtered_x, self.vel_filtered_y
-        if dist_cm > 0.5:
-            rx, ry = -err_x / dist_cm, -err_y / dist_cm   # Outward unit vector
-            tx, ty = -ry, rx                               # Tangential unit vector
+         # 4. Velocity damping (same in every direction)
+        damped_vx = self.Kd * self.vel_filtered_x
+        damped_vy = self.Kd * self.vel_filtered_y
 
-            v_rad = vx * rx + vy * ry
-            v_tan = vx * tx + vy * ty
-
-            # v_rad > 0 means moving OUTWARD -> brake harder; v_rad <= 0 means moving INWARD -> brake lighter
-            kd_rad = (self.Kd * 1.4) if v_rad > 0 else (self.Kd * 0.6)
-
-            damped_vx = (kd_rad * v_rad * rx) + (KD_TANGENTIAL * v_tan * tx)
-            damped_vy = (kd_rad * v_rad * ry) + (KD_TANGENTIAL * v_tan * ty)
-        else:
-            damped_vx = self.Kd * vx
-            damped_vy = self.Kd * vy
 
         self.integral_x = np.clip(self.integral_x + err_x * dt, -15.0, 15.0)
         self.integral_y = np.clip(self.integral_y + err_y * dt, -15.0, 15.0)
